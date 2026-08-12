@@ -12,26 +12,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build archives
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: |
-          set -eu
-          mkdir dist
-          for target in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64 windows-amd64; do
-            os=${target%-*}; arch=${target#*-}; exe=""
-            [ "$os" != windows ] || exe=.exe
-            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w -X main.version=$VERSION" \
-              -o "dist/herdr-notes$exe" ./cmd/herdr-notes
-            if [ "$os" = windows ]; then
-              (cd dist && zip "herdr-notes-$VERSION-$target.zip" "herdr-notes$exe")
-            else
-              tar -czf "dist/herdr-notes-$VERSION-$target.tar.gz" -C dist herdr-notes
-            fi
-            rm "dist/herdr-notes$exe"
-          done
-          (cd dist && sha256sum herdr-notes-* > SHA256SUMS)
+      - name: Build reproducible archives
+        run: python3 scripts/package.py --version "${{ github.ref_name }}"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

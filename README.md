@@ -30,8 +30,8 @@ herdr plugin link .
 
 All manifest commands are plugin-relative (`./bin/herdr-notes`). The bootstrap
 matches the local-first/fail-closed policy used by `herdr-loop` and
-`herdr-sesh-bro`: it prefers an exact source build and will not download a
-prebuilt until a release hash is pinned in `scripts/build.sh`.
+`herdr-sesh-bro`: it prefers an exact source build and otherwise downloads only
+a release archive whose SHA256 is pinned in `scripts/build.sh`.
 
 Invoke **Toggle workspace notes** from Herdr's plugin actions. CLI usage:
 
