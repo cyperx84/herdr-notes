@@ -4,6 +4,16 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-13
+
+### Fixed
+
+- Release archives are now built with `-buildvcs=false`, making their bytes and
+  source-pinned SHA256 values independent of checkout revision/dirty metadata.
+- Cold Herdr pane startup now gets 15 seconds to publish its first heartbeat;
+  the original 5-second handshake produced a false failure on a live cold run.
+- Toggle focus now uses Herdr's plugin-pane focus API rather than changing zoom.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added

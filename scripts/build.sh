@@ -10,29 +10,29 @@ mkdir -p bin
 
 if command -v go >/dev/null 2>&1; then
   echo "herdr-notes: building with local Go toolchain..." >&2
-  exec go build -trimpath -ldflags "-X main.version=v0.1.0" -o bin/herdr-notes ./cmd/herdr-notes
+  exec go build -trimpath -buildvcs=false -ldflags "-X main.version=v0.1.1" -o bin/herdr-notes ./cmd/herdr-notes
 fi
 
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 REPO="cyperx84/herdr-notes"
 os=$(uname -s)
 arch=$(uname -m)
 case "$os/$arch" in
   Darwin/arm64)
     target=darwin-arm64
-    expected=802293aa5c78cbe9c071a4ccb125642e0ca3792ee9eff6ab792067191528c50e
+    expected=2db2bd78051dc17606de7b2d2ffb25627807416582f39d1e83550527c99aa40f
     ;;
   Darwin/x86_64)
     target=darwin-amd64
-    expected=1b672b291cb9067aa9b39ac7e367dabffc459542bce1c9a2be8607c97002f5d7
+    expected=733286e56e296a2290a90c790b9a20cd075956d59c25f9e15c5a72fc6be38c9c
     ;;
   Linux/x86_64)
     target=linux-amd64
-    expected=c4c0a9f4aa4c0d64823a36685369397197e2b3cb663b6819d20e91791f8bb7f1
+    expected=c20f3f75f080b8eaf2cb47006fc9ee7446d836de5120472318782b3a1b986f56
     ;;
   Linux/aarch64|Linux/arm64)
     target=linux-arm64
-    expected=09a2db263393f689dab68991d7acbcdc0db04605e3d87a1664fd4d7ab5cb8948
+    expected=35b2a14abc2d6ce148935636aeca2f651c99f0ed2307a4a391a0996cb4e462d7
     ;;
   *) echo "herdr-notes: unsupported $os/$arch; install Go" >&2; exit 1 ;;
 esac

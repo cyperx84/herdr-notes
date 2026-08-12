@@ -33,6 +33,7 @@ def build(root: Path, dist: Path, version: str, goos: str, goarch: str) -> Path:
             "go",
             "build",
             "-trimpath",
+            "-buildvcs=false",
             "-ldflags",
             f"-s -w -X main.version={version}",
             "-o",
