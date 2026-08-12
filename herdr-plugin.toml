@@ -1,0 +1,48 @@
+id = "herdr-notes"
+name = "Herdr Notes"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "A focused Markdown scratch note for each Herdr workspace"
+# Windows binaries cross-compile, but native Herdr pane integration is not yet
+# live-verified, so the plugin honestly advertises macOS/Linux only for now.
+platforms = ["linux", "macos"]
+repository = "https://github.com/cyperx84/herdr-notes"
+license = "MIT"
+authors = ["cyperx84"]
+
+# Local source builds are preferred. The bootstrap refuses an unverified
+# prebuilt until a release checksum is pinned in scripts/build.sh.
+[[build]]
+platforms = ["linux", "macos"]
+command = ["sh", "scripts/build.sh"]
+
+[[panes]]
+id = "notes"
+title = "Notes"
+placement = "split"
+direction = "right"
+command = ["./bin/herdr-notes"]
+
+# The binary serializes concurrent toggles, matches globally by canonical note
+# identity, and replaces label-only/stale-heartbeat restart corpses.
+[[actions]]
+id = "toggle"
+title = "Toggle workspace notes"
+description = "Open, focus, or close the right-side workspace scratch note"
+contexts = ["workspace"]
+command = ["./bin/herdr-notes", "--toggle"]
+
+[[actions]]
+id = "edit"
+title = "Edit workspace note in Neovim"
+description = "Open the canonical Markdown note in the configured external editor"
+contexts = ["workspace"]
+command = ["./bin/herdr-notes", "--external"]
+
+[config]
+notes_dir = { type = "string", default = "" }
+editor_argv = { type = "string", default = "[\"nvim\"]" }
+
+[default_config]
+notes_dir = ""
+editor_argv = "[\"nvim\"]"

@@ -1,0 +1,8 @@
+/herdr-notes
+/herdr-notes.exe
+/bin/herdr-notes
+/bin/herdr-notes.exe
+/dist/
+.firecrawl/
+.DS_Store
+*.tmp

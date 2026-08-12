@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an improvement within the scratch-note boundary
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What focused per-workspace scratch-note need is unmet?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Product boundary
+      options:
+        - label: This remains one scratch note per workspace, not a logbook/notebook.
+          required: true
