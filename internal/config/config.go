@@ -14,6 +14,18 @@ type Config struct {
 	NotesDir  string
 	Editor    []string
 	Workspace string
+
+	// Scope selects what a note is about: workspace, project, or global.
+	// Empty means the caller's default.
+	Scope string
+	// BundleDir is the OKF bundle root. Empty means NotesDir, and then the
+	// plugin state directory — so the zero-config default works for anyone
+	// while pointing it at an existing vault is one setting.
+	BundleDir string
+	// DocType is the `type` written into documents this tool creates. The
+	// useful vocabulary belongs to the bundle, not to this tool, so a bundle
+	// with its own conventions can keep them.
+	DocType string
 }
 
 // Load reads HERDR_NOTES_* variables. editor_argv is a JSON string array so
@@ -22,6 +34,9 @@ func Load() (Config, error) {
 	c := Config{
 		NotesDir:  strings.TrimSpace(os.Getenv("HERDR_NOTES_NOTES_DIR")),
 		Workspace: strings.TrimSpace(os.Getenv("HERDR_WORKSPACE_ID")),
+		Scope:     strings.TrimSpace(os.Getenv("HERDR_NOTES_SCOPE")),
+		BundleDir: strings.TrimSpace(os.Getenv("HERDR_NOTES_BUNDLE_DIR")),
+		DocType:   strings.TrimSpace(os.Getenv("HERDR_NOTES_DOC_TYPE")),
 	}
 	if raw := strings.TrimSpace(os.Getenv("HERDR_NOTES_EDITOR_ARGV")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &c.Editor); err != nil {
@@ -40,7 +55,40 @@ func Load() (Config, error) {
 			return Config{}, err
 		}
 	}
+	if c.BundleDir != "" {
+		var err error
+		c.BundleDir, err = expandHome(c.BundleDir)
+		if err != nil {
+			return Config{}, err
+		}
+	}
 	return c, nil
+}
+
+// ResolveBundleDir returns the bundle root, preferring explicit configuration
+// and falling back to herdr's plugin state directory.
+//
+// The fallback is what keeps this zero-config for someone who just installs
+// the plugin, while a single setting points it at an existing vault.
+func (c Config) ResolveBundleDir(stateDir string) (string, error) {
+	for _, candidate := range []string{c.BundleDir, c.NotesDir, stateDir} {
+		if strings.TrimSpace(candidate) != "" {
+			return candidate, nil
+		}
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve a bundle directory: %w", err)
+	}
+	return filepath.Join(base, "herdr", "herdr-notes"), nil
+}
+
+// ResolveDocType returns the frontmatter `type` for created documents.
+func (c Config) ResolveDocType() string {
+	if c.DocType != "" {
+		return c.DocType
+	}
+	return "Note"
 }
 
 func expandHome(path string) (string, error) {

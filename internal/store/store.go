@@ -24,6 +24,26 @@ type Store struct {
 	mu         sync.Mutex
 }
 
+// OpenPath returns a Store for an exact file path.
+//
+// Open derives a path from a workspace id; OpenPath is for callers that have
+// already resolved one — the bundle and scope packages now own that decision,
+// and two components computing the same path independently is how they drift.
+func OpenPath(path string) (*Store, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("store: path is required")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		Path:      abs,
+		workspace: strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs)),
+		base:      filepath.Dir(abs),
+	}, nil
+}
+
 // Open resolves a workspace's canonical .md path. A workspace ID is required:
 // silently sharing a fallback would violate the one-note-per-workspace boundary.
 func Open(notesDir, workspace string) (*Store, error) {
