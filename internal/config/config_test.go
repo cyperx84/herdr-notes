@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -31,15 +32,30 @@ func TestLoadBundleDir(t *testing.T) {
 	}
 	t.Setenv("HERDR_NOTES_BUNDLE_DIR", "")
 
+	// No vault present: the default resolves empty, letting ResolveBundleDir
+	// fall back to plugin state rather than inventing a personal path.
 	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BundleDir != "" {
+		t.Fatalf("BundleDir with no vault = %q, want empty fallback", c.BundleDir)
+	}
+
+	// A vault does exist: the default points at its openwiki directory.
+	if err := os.MkdirAll(filepath.Join(home, "vaults", "CyperX", "openwiki"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(home, "vaults", "CyperX", "openwiki")
 	if c.BundleDir != want {
-		t.Fatalf("BundleDir = %q, want %q", c.BundleDir, want)
+		t.Fatalf("BundleDir with vault = %q, want %q", c.BundleDir, want)
 	}
 
+	// An explicit override always wins.
 	override := filepath.Join(t.TempDir(), "bundle")
 	t.Setenv("HERDR_NOTES_BUNDLE_DIR", override)
 	c, err = Load()

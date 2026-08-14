@@ -41,10 +41,10 @@ command = ["./bin/herdr-notes", "--external"]
 
 [config]
 notes_dir = { type = "string", default = "" }
-bundle_dir = { type = "string", default = "~/vaults/CyperX/openwiki" }
+bundle_dir = { type = "string", default = "" }
 editor_argv = { type = "string", default = "[\"nvim\"]" }
 
 [default_config]
 notes_dir = ""
-bundle_dir = "~/vaults/CyperX/openwiki"
+bundle_dir = ""
 editor_argv = "[\"nvim\"]"

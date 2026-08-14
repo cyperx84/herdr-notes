@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/cyperx84/herdr-notes/internal/herdripc"
-	"github.com/cyperx84/herdr-notes/internal/store"
+	"github.com/cyperx84/herdr-notes/internal/notes"
 )
 
 const (
@@ -42,9 +42,15 @@ type Decision struct {
 	PaneID string
 }
 
-// Decide returns OPEN, FOCUS, CLOSE, or REPLACE. Matching uses canonical file
-// identity, so two processes can never intentionally edit one note.
-func Decide(input []byte, now time.Time) Decision {
+// Decide returns OPEN, FOCUS, CLOSE, or REPLACE.
+//
+// A pane is identified by the notes page it is showing — recorded in the
+// pane's metadata tokens as the bundle-relative page path — not by the
+// workspace it lives in. That identity is what makes a toggle idempotent
+// under project scope, where one page is shared by many workspaces: two panes
+// on two workspaces showing the same project page must resolve to one, not
+// two independent notes.
+func Decide(input []byte, pageKey string, now time.Time) Decision {
 	var list paneList
 	input = []byte(strings.TrimPrefix(string(input), "\ufeff"))
 	if json.Unmarshal(input, &list) != nil {
@@ -60,27 +66,60 @@ func Decide(input []byte, now time.Time) Decision {
 	if focused == nil {
 		return Decision{Action: "OPEN"}
 	}
-	key := store.FileKey(focused.WorkspaceID)
-	var candidate *Pane
+	// Two distinct outcomes to find among Notes panes:
+	//  - a live pane showing this exact page (fresh heartbeat, matching key);
+	//  - a corpse to reclaim (no page key at all, or a stale heartbeat).
+	// A live pane showing a *different* page is neither: it is a legitimate
+	// second Notes pane and must be left alone.
+	var live, corpse *Pane
 	for i := range list.Result.Panes {
 		p := &list.Result.Panes[i]
-		if store.FileKey(p.WorkspaceID) != key || !isNotes(*p) {
+		if !isNotes(*p) {
 			continue
 		}
-		if candidate == nil || (p.TabID == focused.TabID && candidate.TabID != focused.TabID) {
-			candidate = p
+		key := paneKey(*p)
+		switch {
+		case key == pageKey && !heartbeatStale(p.Tokens, now):
+			if live == nil || (p.TabID == focused.TabID && live.TabID != focused.TabID) {
+				live = p
+			}
+		case key == "" || heartbeatStale(p.Tokens, now):
+			if corpse == nil {
+				corpse = p
+			}
 		}
 	}
-	if candidate == nil || !safeID(candidate.PaneID) {
-		return Decision{Action: "OPEN"}
+	if live != nil {
+		if !safeID(live.PaneID) {
+			return Decision{Action: "OPEN"}
+		}
+		if live.PaneID == focused.PaneID {
+			return Decision{Action: "CLOSE", PaneID: live.PaneID}
+		}
+		return Decision{Action: "FOCUS", PaneID: live.PaneID}
 	}
-	if heartbeatStale(candidate.Tokens, now) {
-		return Decision{Action: "REPLACE", PaneID: candidate.PaneID}
+	if corpse != nil && safeID(corpse.PaneID) {
+		return Decision{Action: "REPLACE", PaneID: corpse.PaneID}
 	}
-	if candidate.PaneID == focused.PaneID {
-		return Decision{Action: "CLOSE", PaneID: candidate.PaneID}
+	return Decision{Action: "OPEN"}
+}
+
+// paneKey returns the notes page a pane is showing, or "".
+//
+// The page path is carried in the pane's metadata tokens under the source key
+// alongside its heartbeat, so that the heartbeat and the identity cannot
+// disagree. Panes that predate this field carry no key and are treated as not
+// matching any page, which means a stale pre-scope pane is replaced rather
+// than mis-focused.
+func paneKey(p Pane) string {
+	if !isNotes(p) {
+		return ""
 	}
-	return Decision{Action: "FOCUS", PaneID: candidate.PaneID}
+	var key string
+	if msg := p.Tokens[herdripc.PageKey]; json.Unmarshal(msg, &key) == nil {
+		return key
+	}
+	return ""
 }
 
 func isNotes(p Pane) bool {
@@ -119,9 +158,16 @@ func safeID(id string) bool {
 	return true
 }
 
-// Toggle serializes action invocations per note, preventing startup races.
-func Toggle(note *store.Store) error {
-	unlock, err := acquire(filepath.Dir(note.Path), filepath.Base(note.Path))
+// Toggle serializes action invocations per page, preventing startup races.
+//
+// It takes the application core rather than a raw path because the page
+// identity — which page is open, and how to match a live pane to it — is
+// exactly what notes.App resolves. Passing a file path would push that
+// decision into a second place and the two would drift.
+func Toggle(app *notes.App) error {
+	pageKey := app.Store.Resolve(app.Current())
+	lockDir := filepath.Join(app.Store.Root(), filepath.Dir(filepath.FromSlash(pageKey)))
+	unlock, err := acquire(lockDir, filepath.Base(pageKey))
 	if err != nil {
 		return err
 	}
@@ -135,7 +181,7 @@ func Toggle(note *store.Store) error {
 	if err != nil {
 		return fmt.Errorf("list panes: %w", err)
 	}
-	decision := Decide(output, time.Now())
+	decision := Decide(output, pageKey, time.Now())
 	switch decision.Action {
 	case "FOCUS":
 		return focus(bin, decision.PaneID)
@@ -143,9 +189,9 @@ func Toggle(note *store.Store) error {
 		return closePane(bin, decision.PaneID)
 	case "REPLACE":
 		_ = closePane(bin, decision.PaneID)
-		return open(bin, strings.TrimSuffix(filepath.Base(note.Path), filepath.Ext(note.Path)))
+		return open(bin, pageKey)
 	default:
-		return open(bin, strings.TrimSuffix(filepath.Base(note.Path), filepath.Ext(note.Path)))
+		return open(bin, pageKey)
 	}
 }
 
@@ -164,20 +210,20 @@ func closePane(bin, paneID string) error {
 	return nil
 }
 
-func open(bin, noteKey string) error {
+func open(bin, pageKey string) error {
 	args := []string{"plugin", "pane", "open", "--plugin", "herdr-notes", "--entrypoint", "notes", "--placement", "split", "--direction", "right", "--focus"}
 	cmd := exec.Command(bin, args...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-	// Keep the per-note action lock until the new TUI's startup heartbeat is
+	// Keep the per-page action lock until the new TUI's startup heartbeat is
 	// observable. Without this handshake, a second rapid toggle can see the
 	// fresh pane as label-only and replace it as a restart corpse.
 	deadline := time.Now().Add(startupDeadline)
 	for time.Now().Before(deadline) {
 		output, err := exec.Command(bin, "pane", "list").Output()
-		if err == nil && liveNotePresent(output, noteKey, time.Now()) {
+		if err == nil && liveNotePresent(output, pageKey, time.Now()) {
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -185,13 +231,13 @@ func open(bin, noteKey string) error {
 	return fmt.Errorf("notes pane opened but did not publish its heartbeat within %s", startupDeadline)
 }
 
-func liveNotePresent(input []byte, noteKey string, now time.Time) bool {
+func liveNotePresent(input []byte, pageKey string, now time.Time) bool {
 	var list paneList
 	if json.Unmarshal(input, &list) != nil {
 		return false
 	}
 	for _, pane := range list.Result.Panes {
-		if store.FileKey(pane.WorkspaceID) == noteKey && isNotes(pane) && !heartbeatStale(pane.Tokens, now) {
+		if paneKey(pane) == pageKey && isNotes(pane) && !heartbeatStale(pane.Tokens, now) {
 			return true
 		}
 	}

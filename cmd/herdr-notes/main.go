@@ -11,17 +11,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cyperx84/herdr-notes/internal/bundle"
 	"github.com/cyperx84/herdr-notes/internal/config"
-	"github.com/cyperx84/herdr-notes/internal/herdripc"
 	"github.com/cyperx84/herdr-notes/internal/launcher"
 	"github.com/cyperx84/herdr-notes/internal/notes"
 	"github.com/cyperx84/herdr-notes/internal/scope"
-	"github.com/cyperx84/herdr-notes/internal/store"
 	"github.com/cyperx84/herdr-notes/internal/tui"
 )
 
@@ -73,7 +70,6 @@ func run(args []string) error {
 		showPath    = fs.Bool("path", false, "print the current page's path")
 		external    = fs.Bool("external", false, "open the current page in the editor")
 		toggle      = fs.Bool("toggle", false, "toggle the herdr notes pane")
-		stamp       = fs.String("stamp", "", "stamp heartbeat metadata on a pane")
 		showVersion = fs.Bool("version", false, "print version")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -82,9 +78,6 @@ func run(args []string) error {
 	if *showVersion {
 		fmt.Println(version)
 		return nil
-	}
-	if *stamp != "" {
-		return herdripc.Stamp(*stamp, time.Now())
 	}
 
 	cfg, err := config.Load()
@@ -286,25 +279,11 @@ func doctor(app *notes.App) error {
 // that this change is additive: the pane keeps working exactly as before while
 // the bundle-backed CLI lands beside it.
 func runTUI(app *notes.App) error {
-	page := app.Store.Resolve(app.Current())
-	s, err := store.OpenPath(absPathFor(app, page))
-	if err != nil {
-		return err
-	}
-	model, err := tui.New(s, app.EditorArgv, os.Getenv("HERDR_PANE_ID"))
-	if err != nil {
-		return err
-	}
-	_, runErr := tea.NewProgram(model, tea.WithAltScreen()).Run()
-	saveErr := model.Finalize()
-	if runErr != nil {
+	model := tui.New(app, app.EditorArgv, os.Getenv("HERDR_PANE_ID"))
+	if _, runErr := tea.NewProgram(model, tea.WithAltScreen()).Run(); runErr != nil {
 		return runErr
 	}
-	return saveErr
-}
-
-func absPathFor(app *notes.App, page string) string {
-	return app.Store.Root() + string(os.PathSeparator) + page
+	return nil
 }
 
 func togglePane(cfg config.Config) error {
@@ -312,9 +291,5 @@ func togglePane(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	s, err := store.OpenPath(absPathFor(app, app.Store.Resolve(app.Current())))
-	if err != nil {
-		return err
-	}
-	return launcher.Toggle(s)
+	return launcher.Toggle(app)
 }

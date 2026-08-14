@@ -33,11 +33,7 @@ type Config struct {
 func Load() (Config, error) {
 	bundleDir := strings.TrimSpace(os.Getenv("HERDR_NOTES_BUNDLE_DIR"))
 	if bundleDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return Config{}, fmt.Errorf("resolve default bundle_dir: %w", err)
-		}
-		bundleDir = filepath.Join(home, "vaults", "CyperX", "openwiki")
+		bundleDir = defaultBundleDir()
 	}
 
 	c := Config{
@@ -72,6 +68,26 @@ func Load() (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+// defaultBundleDir returns the bundle root to use when none is configured.
+//
+// It points at the agent-sanctioned openwiki directory inside a vault only
+// when that vault actually exists on this machine; otherwise it returns ""
+// so that ResolveBundleDir falls back to plugin state. This keeps the
+// zero-config default working for anyone — no personal path leaks into a
+// machine where it does not exist — while still landing in the vault on a
+// machine that has one.
+func defaultBundleDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	vault := filepath.Join(home, "vaults", "CyperX", "openwiki")
+	if info, err := os.Stat(vault); err == nil && info.IsDir() {
+		return vault
+	}
+	return ""
 }
 
 // ResolveBundleDir returns the bundle root, preferring explicit configuration

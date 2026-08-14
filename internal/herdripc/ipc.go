@@ -14,11 +14,19 @@ import (
 const (
 	Source = "herdr-notes"
 	Title  = "Notes"
+	// PageKey is the metadata token carrying the bundle-relative page path a
+	// pane is showing. It lets the launcher identify a pane by page rather
+	// than by workspace, which is what makes toggles idempotent under project
+	// scope where one page is shared across workspaces.
+	//
+	// Token keys must match herdr's schema (`^[A-Za-z0-9_-]{1,32}$`), so the
+	// separator is a dash, not a dot.
+	PageKey = "herdr-notes-page"
 )
 
-// Stamp marks a pane as a live Notes process. Failures are intentionally
-// non-fatal to the TUI, which also works outside Herdr.
-func Stamp(paneID string, now time.Time) error {
+// Stamp marks a pane as a live Notes process showing a given page. Failures
+// are intentionally non-fatal to the TUI, which also works outside Herdr.
+func Stamp(paneID, pageKey string, now time.Time) error {
 	if paneID == "" {
 		return errors.New("empty pane id")
 	}
@@ -26,7 +34,10 @@ func Stamp(paneID string, now time.Time) error {
 		"pane_id": paneID,
 		"source":  Source,
 		"title":   Title,
-		"tokens":  map[string]string{Source: fmt.Sprint(now.Unix())},
+		"tokens": map[string]string{
+			Source:  fmt.Sprint(now.Unix()),
+			PageKey: pageKey,
+		},
 	})
 }
 
