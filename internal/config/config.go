@@ -18,9 +18,9 @@ type Config struct {
 	// Scope selects what a note is about: workspace, project, or global.
 	// Empty means the caller's default.
 	Scope string
-	// BundleDir is the OKF bundle root. Empty means NotesDir, and then the
-	// plugin state directory — so the zero-config default works for anyone
-	// while pointing it at an existing vault is one setting.
+	// BundleDir is the OKF bundle root. Load defaults it to the agent-sanctioned
+	// openwiki directory in the user's vault; explicitly constructed Config
+	// values can still leave it empty to fall back to NotesDir or plugin state.
 	BundleDir string
 	// DocType is the `type` written into documents this tool creates. The
 	// useful vocabulary belongs to the bundle, not to this tool, so a bundle
@@ -31,11 +31,20 @@ type Config struct {
 // Load reads HERDR_NOTES_* variables. editor_argv is a JSON string array so
 // paths and arguments survive intact and cannot become shell syntax.
 func Load() (Config, error) {
+	bundleDir := strings.TrimSpace(os.Getenv("HERDR_NOTES_BUNDLE_DIR"))
+	if bundleDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return Config{}, fmt.Errorf("resolve default bundle_dir: %w", err)
+		}
+		bundleDir = filepath.Join(home, "vaults", "CyperX", "openwiki")
+	}
+
 	c := Config{
 		NotesDir:  strings.TrimSpace(os.Getenv("HERDR_NOTES_NOTES_DIR")),
 		Workspace: strings.TrimSpace(os.Getenv("HERDR_WORKSPACE_ID")),
 		Scope:     strings.TrimSpace(os.Getenv("HERDR_NOTES_SCOPE")),
-		BundleDir: strings.TrimSpace(os.Getenv("HERDR_NOTES_BUNDLE_DIR")),
+		BundleDir: bundleDir,
 		DocType:   strings.TrimSpace(os.Getenv("HERDR_NOTES_DOC_TYPE")),
 	}
 	if raw := strings.TrimSpace(os.Getenv("HERDR_NOTES_EDITOR_ARGV")); raw != "" {
