@@ -1,6 +1,6 @@
 id = "herdr-notes"
 name = "Herdr Notes"
-version = "0.1.1"
+version = "0.2.0"
 min_herdr_version = "0.8.0"
 description = "A focused Markdown scratch note for each Herdr workspace"
 # Windows binaries cross-compile, but native Herdr pane integration is not yet

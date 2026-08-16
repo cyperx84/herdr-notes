@@ -67,6 +67,11 @@ type Model struct {
 	width  int
 	height int
 	status string
+
+	// lastMod tracks the mod time of the current page at last load, so a
+	// heartbeat can detect an external edit (an agent appending via the CLI)
+	// and reload without re-parsing on every tick.
+	lastMod time.Time
 }
 
 // New builds a Model showing the scope's current page.
@@ -111,7 +116,21 @@ func (m *Model) loadCurrent() {
 		return
 	}
 	m.body(page.Doc.Body)
+	m.lastMod = page.ModTime
 	m.status = page.Path
+}
+
+// refreshIfChanged reloads the current page only when its mod time moved. It
+// is what makes shared pages feel live: an agent appending on another pane
+// changes the file, and the next heartbeat picks it up.
+func (m *Model) refreshIfChanged() {
+	page, err := m.app.Read(m.current)
+	if err != nil {
+		return
+	}
+	if page.ModTime.After(m.lastMod) {
+		m.loadCurrent()
+	}
 }
 
 func (m *Model) body(md string) {
@@ -139,6 +158,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case heartbeatTick:
+		m.refreshIfChanged()
 		return m, tea.Batch(heartbeatCmd(m.paneID, m.current), heartbeatAfter())
 
 	case editDone:

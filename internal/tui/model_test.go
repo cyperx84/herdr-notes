@@ -154,3 +154,41 @@ func TestRepeatRenderIsMemoized(t *testing.T) {
 		t.Error("the first render should have missed")
 	}
 }
+
+// Live-refresh: an external append bumps the file's mod time and the next
+// heartbeat reload picks it up, without re-rendering when nothing changed.
+func TestRefreshIfChangedReloadsOnExternalAppend(t *testing.T) {
+	m := testModel(t)
+	before := m.lastMod
+	if before.IsZero() {
+		t.Fatal("lastMod should be set after initial load")
+	}
+	if !strings.Contains(m.currentMarkdown(), "hello from the current page") {
+		t.Fatal("initial page content missing")
+	}
+
+	// External append via the app (as an agent on another pane would).
+	time.Sleep(time.Millisecond * 10) // ensure a distinct mod time
+	if err := m.app.Append("", "added by an agent"); err != nil {
+		t.Fatal(err)
+	}
+
+	m.refreshIfChanged()
+	if m.lastMod.Equal(before) {
+		t.Fatal("refresh did not detect the external change")
+	}
+	if !strings.Contains(m.currentMarkdown(), "added by an agent") {
+		t.Error("reloaded page does not include the appended line")
+	}
+}
+
+// No-op when nothing changed: a heartbeat should not re-render identical
+// content.
+func TestRefreshIfChangedIsNoopWithoutChange(t *testing.T) {
+	m := testModel(t)
+	before := m.lastMod
+	m.refreshIfChanged()
+	if !m.lastMod.Equal(before) {
+		t.Error("mod time changed when the file did not")
+	}
+}

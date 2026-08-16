@@ -35,6 +35,9 @@ type Page struct {
 	// its link target never diverge.
 	Path string
 	Doc  okf.Doc
+	// ModTime is the file's last-modified time, for change detection. It is
+	// zero when a store does not know it or the page does not exist.
+	ModTime time.Time
 }
 
 // Title returns the page's title, falling back to its path.
@@ -164,14 +167,28 @@ func (d *Dir) List() ([]Page, error) {
 // Read implements Store.
 func (d *Dir) Read(path string) (Page, error) {
 	rel := d.Resolve(path)
-	data, err := os.ReadFile(d.abs(rel))
+	page, err := d.readResolved(rel)
+	if err != nil {
+		return Page{}, err
+	}
+	return page, nil
+}
+
+// readResolved reads a bundle-relative path and attaches its mod time.
+func (d *Dir) readResolved(rel string) (Page, error) {
+	target := d.abs(rel)
+	data, err := os.ReadFile(target)
 	if errors.Is(err, os.ErrNotExist) {
 		return Page{}, fmt.Errorf("%w: %s", ErrNotFound, rel)
 	}
 	if err != nil {
 		return Page{}, err
 	}
-	return Page{Path: rel, Doc: okf.Parse(data)}, nil
+	var mod time.Time
+	if info, statErr := os.Stat(target); statErr == nil {
+		mod = info.ModTime()
+	}
+	return Page{Path: rel, Doc: okf.Parse(data), ModTime: mod}, nil
 }
 
 // Write implements Store with an atomic replace, so a crash mid-write can
